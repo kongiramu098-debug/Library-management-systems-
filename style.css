@@ -1,0 +1,27 @@
+:root{--ink:#1d2a2a;--paper:#f3f6f4;--card:#fff;--brand:#0f5c4d;--accent:#c9a227;--bad:#b3261e;--line:#d5dfdb}
+@media(prefers-color-scheme:dark){:root{--ink:#e6eeeb;--paper:#121a19;--card:#1b2625;--brand:#3fb69c;--accent:#e0bb4a;--bad:#ff8a80;--line:#2f3f3c}}
+*{box-sizing:border-box}
+body{margin:0;font-family:Georgia,'Times New Roman',serif;background:var(--paper);color:var(--ink);line-height:1.5}
+h1,h2,h3,button,input,select,th{font-family:'Trebuchet MS',Verdana,sans-serif}
+header{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;background:var(--brand);color:#fff}
+header h1{margin:0;font-size:1.2rem}
+main{max-width:1000px;margin:0 auto;padding:16px}
+section.box{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px}
+h2{margin:0 0 10px;font-size:1.05rem}
+input,select,button{padding:9px 11px;border:1px solid var(--line);border-radius:6px;font-size:.95rem;background:var(--card);color:var(--ink)}
+button{background:var(--brand);color:#fff;border:0;cursor:pointer}
+button.ghost{background:transparent;color:#fff;border:1px solid #fff}
+button.del{background:var(--bad)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:1px}
+.row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.row input,.row select{flex:1;min-width:130px}
+.tbl{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.92rem}
+th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line)}
+.stats{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}
+.stat{flex:1;min-width:120px;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:6px;padding:10px}
+.stat b{display:block;font-size:1.5rem}
+.late{color:var(--bad);font-weight:bold}.ok{color:var(--brand);font-weight:bold}
+.login{max-width:360px;margin:12vh auto;background:var(--card);padding:24px;border:1px solid var(--line);border-radius:8px}
+.login input{width:100%;margin-bottom:10px}.login button{width:100%}
+#msg{color:var(--bad);min-height:1.4em}

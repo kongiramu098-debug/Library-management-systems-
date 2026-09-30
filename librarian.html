@@ -1,0 +1,90 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Librarian</title><script src="qr.js"></script><link rel="stylesheet" href="style.css"></head><body>
+<header><h1>Library desk · <span id="who"></span></h1><button class="ghost" onclick="logout()">Sign out</button></header>
+<main>
+<div class="stats" id="tot"></div>
+<section class="box"><h2>Sections and stock</h2><div class="row"><input id="sn" placeholder="New section name"><button onclick="addSection()">Add section</button></div>
+<div class="tbl"><table><thead><tr><th>Section</th><th>Titles</th><th>Total copies</th><th>On shelf</th></tr></thead><tbody id="sec"></tbody></table></div></section>
+<section class="box"><h2>Books</h2><div class="row"><input id="bt" placeholder="Title"><input id="ba" placeholder="Author"><select id="bs"></select><input id="bc" type="number" min="1" value="1" placeholder="Copies"><button onclick="addBook()">Add book</button></div>
+<div class="row"><input id="dbk" placeholder="Enter book ID number or title to delete"><button class="del" onclick="delByInput('book')">Delete book</button></div>
+<div class="row"><input id="bf" placeholder="Search books" oninput="filt('#books',this.value)"></div>
+<div class="tbl"><table><thead><tr><th>ID</th><th>Title</th><th>Author</th><th>Section</th><th>On shelf</th><th></th></tr></thead><tbody id="books"></tbody></table></div></section>
+<section class="box"><h2>Students</h2><div class="row"><input id="sname" placeholder="Name"><input id="semail" type="email" placeholder="Email"><input id="spw" placeholder="Temporary password"><button onclick="addStudent()">Add student</button></div>
+<div class="row"><input id="dst" placeholder="Enter student ID number, name or email to delete"><button class="del" onclick="delByInput('student')">Delete student</button></div>
+<div class="row"><input id="sf" placeholder="Search students" oninput="filt('#stu',this.value)"></div>
+<div class="tbl"><table><thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Points</th><th>Holding</th><th></th></tr></thead><tbody id="stu"></tbody></table></div></section>
+<section class="box"><h2>Borrowals and returns</h2><div class="tbl"><table><thead><tr><th>Student</th><th>Book</th><th>Borrowed</th><th>Due</th><th>Status</th><th></th></tr></thead><tbody id="bor"></tbody></table></div></section>
+<section class="box"><h2>Full history</h2><div class="row"><input id="hq" placeholder="Search by student name, email or book" oninput="hsearch()"></div>
+<div class="tbl"><table><thead><tr><th>Student</th><th>Book</th><th>Borrowed</th><th>Due</th><th>Returned</th><th>Status</th></tr></thead><tbody id="hist"></tbody></table></div></section>
+<section class="box"><h2>Student search history</h2><div class="tbl"><table><thead><tr><th>When</th><th>Student</th><th>Searched for</th></tr></thead><tbody id="srch"></tbody></table></div></section>
+<section class="box"><h2>Fine payments</h2><div class="tbl"><table><thead><tr><th>Paid on</th><th>Student</th><th>Book</th><th>Amount</th><th>Method</th><th>Receipt</th><th>Details</th></tr></thead><tbody id="pays"></tbody></table></div></section>
+<section class="box"><h2>Recent activity</h2><div class="tbl"><table><tbody id="logs"></tbody></table></div></section>
+</main>
+<div id="cp" role="dialog" aria-modal="true" aria-labelledby="ctitle" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:10;overflow:auto;padding:16px">
+<div class="box" style="max-width:420px;margin:20px auto;text-align:center"><h2 id="ctitle"></h2>
+<p>Ask the student to scan this with any UPI app (GPay, PhonePe, Paytm), or take cash.</p>
+<div id="cqr" style="display:inline-block;background:#fff;padding:10px;border-radius:6px"></div>
+<p>UPI ID: <b id="cupi"></b></p>
+<button style="width:100%;margin-bottom:8px" onclick="received('upi-qr')">Paid by UPI</button>
+<button style="width:100%;margin-bottom:8px" onclick="received('cash')">Paid in cash</button>
+<button class="del" style="width:100%" onclick="$('#cp').style.display='none'">Collect later</button></div></div>
+<script src="common.js"></script><script>
+guard('librarian');
+let BOOKS=[],STU=[];
+async function load(){
+  const [st,books,stu,bor,logs,pays]=await Promise.all([api('/stats'),api('/books'),api('/students'),api('/borrowals'),api('/logs'),api('/payments')]);
+  BOOKS=books;STU=stu;const t=st.totals;
+  $('#tot').innerHTML=[['students','Students'],['borrowed','Books out'],['overdue','Overdue'],['fines','Fines collected'],['pending','Fines pending']].map(([k,l])=>`<div class="stat"><b>${t[k]}</b>${l}</div>`).join('');
+  $('#sec').innerHTML=st.sections.map(s=>`<tr><td>${esc(s.name)}</td><td>${s.titles}</td><td>${s.total}</td><td>${s.available}</td></tr>`).join('');
+  $('#bs').innerHTML=st.sections.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');
+  $('#books').innerHTML=books.map(b=>`<tr><td>${b.id}</td><td>${esc(b.title)}</td><td>${esc(b.author)}</td><td>${esc(b.section)}</td><td>${b.available_copies}/${b.total_copies}</td><td><button class="del" onclick="rmBook(${b.id})">Remove</button></td></tr>`).join('')||'<tr><td colspan="6">No books yet.</td></tr>';
+  $('#stu').innerHTML=stu.map(s=>`<tr><td>${s.id}</td><td>${esc(s.name)}</td><td>${esc(s.email)}</td><td>${s.points}</td><td>${s.active}</td><td><button class="del" onclick="rmStu(${s.id})">Remove</button></td></tr>`).join('')||'<tr><td colspan="6">No students yet.</td></tr>';
+  $('#bor').innerHTML=bor.map(r=>{
+    const over=!!r.overdue;
+    const s=r.returned_at?(r.fine?(r.fine_paid>=r.fine?`<span class="ok">Late, fine ₹${r.fine} paid</span>`:`<span class="late">Late, fine ₹${r.fine} unpaid</span>`):'<span class="ok">On time</span>'):(over?'<span class="late">Overdue</span>':'Out');
+    return `<tr><td>${esc(r.student)}</td><td>${esc(r.title)}</td><td>${fmt(r.borrowed_at)}</td><td>${fmt(r.due_date)}</td><td>${s}</td><td>${!r.returned_at?`<button onclick="ret(${r.id})">Mark returned</button>`:(r.fine>r.fine_paid?`<button onclick="collect(${r.id},${r.fine-r.fine_paid})">Collect fine</button>`:'')}</td></tr>`}).join('')||'<tr><td colspan="6">No borrowals yet.</td></tr>';
+  $('#pays').innerHTML=pays.map(p=>`<tr><td>${new Date(p.paid_at).toLocaleString()}</td><td>${esc(p.student)}</td><td>${esc(p.title)}</td><td>₹${p.amount}</td><td>${esc(p.method)}</td><td>${esc(p.ref)}</td><td>${esc(p.utr||'-')}</td></tr>`).join('')||'<tr><td colspan="7">No payments yet.</td></tr>';
+  $('#logs').innerHTML=logs.map(l=>`<tr><td>${new Date(l.at).toLocaleString()}</td><td>${esc(l.userName||'')}</td><td>${esc(l.message)}</td></tr>`).join('');
+  filt('#books',$('#bf').value);filt('#stu',$('#sf').value);loadHistory();loadSearches();
+}
+function filt(tb,q){q=q.toLowerCase();document.querySelectorAll(tb+' tr').forEach(r=>r.style.display=r.textContent.toLowerCase().includes(q)?'':'none')}
+let HT=null;
+function hsearch(){clearTimeout(HT);HT=setTimeout(loadHistory,300)}
+async function loadHistory(){
+  const h=await api('/history?q='+encodeURIComponent($('#hq').value));
+  $('#hist').innerHTML=h.map(r=>{
+    const st=r.returned_at?(r.fine?`<span class="late">Late, fine ₹${r.fine} ${r.fine_paid>=r.fine?'paid':'unpaid'}</span>`:'<span class="ok">Returned on time</span>'):(r.overdue?'<span class="late">Overdue</span>':'Out');
+    return `<tr><td>${esc(r.student)}</td><td>${esc(r.title)}</td><td>${fmt(r.borrowed_at)}</td><td>${fmt(r.due_date)}</td><td>${fmt(r.returned_at)}</td><td>${st}</td></tr>`}).join('')||'<tr><td colspan="6">No history found.</td></tr>';
+}
+async function loadSearches(){
+  const s=await api('/searches');
+  $('#srch').innerHTML=s.map(x=>`<tr><td>${new Date(x.at).toLocaleString()}</td><td>${esc(x.userName||'')}</td><td>${esc(x.message)}</td></tr>`).join('')||'<tr><td colspan="3">No searches yet.</td></tr>';
+}
+const val=id=>$('#'+id).value.trim();
+async function addSection(){await api('/sections','POST',{name:val('sn')});$('#sn').value='';load();}
+async function addBook(){await api('/books','POST',{title:val('bt'),author:val('ba'),sectionId:$('#bs').value,copies:val('bc')});['bt','ba'].forEach(i=>$('#'+i).value='');load();}
+async function rmBook(id){if(confirm('Remove this book?')){await api('/books/'+id,'DELETE');load();}}
+async function addStudent(){await api('/students','POST',{name:val('sname'),email:val('semail'),password:val('spw')});['sname','semail','spw'].forEach(i=>$('#'+i).value='');load();}
+async function rmStu(id){if(confirm('Remove this student?')){await api('/students/'+id,'DELETE');load();}}
+async function delByInput(kind){
+  const box=kind=='book'?'dbk':'dst',v=val(box).toLowerCase();
+  if(!v)return alert('Enter an ID number or a name first');
+  const list=kind=='book'?BOOKS:STU,key=kind=='book'?x=>x.title:x=>x.name;
+  const m=/^\d+$/.test(v)?list.filter(x=>x.id==v):list.filter(x=>key(x).toLowerCase()==v||(x.email||'').toLowerCase()==v);
+  if(m.length!=1)return alert(m.length?'More than one match. Use the ID number.':'No '+kind+' found for "'+v+'"');
+  if(!confirm('Delete '+key(m[0])+'?'))return;
+  await api('/'+(kind=='book'?'books/':'students/')+m[0].id,'DELETE');$('#'+box).value='';load();
+}
+async function pay(id){await api('/pay','POST',{borrowalId:id});load();}
+async function ret(id){const r=await api('/return/'+id,'POST');await load();if(r.fine)collect(id,r.fine);}
+let COL=null;
+async function collect(id,amt){
+  COL=id;const c=await api('/payconfig'),e=encodeURIComponent;
+  $('#ctitle').textContent='Collect fine ₹'+amt;
+  const link=`upi://pay?pa=${e(c.upiId)}&pn=${e(c.payeeName)}&am=${amt}&cu=INR&tn=${e('Library fine')}&tr=${e(c.ref)}`;
+  $('#cqr').innerHTML='';new QRCode($('#cqr'),{text:link,width:200,height:200});
+  $('#cupi').textContent=c.upiId+(c.demo?' (demo)':'');$('#cp').style.display='block';
+}
+async function received(method){await api('/pay','POST',{borrowalId:COL,method});$('#cp').style.display='none';load();}
+load();
+</script></body></html>

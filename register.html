@@ -1,0 +1,17 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Create account</title><link rel="stylesheet" href="style.css"></head><body>
+<div class="login"><h1>Create account</h1>
+<select id="role" style="width:100%;margin-bottom:10px"><option value="student">Student</option><option value="librarian">Admin (librarian)</option></select>
+<input id="name" placeholder="Full name" autocomplete="name">
+<input id="email" type="email" placeholder="Email" autocomplete="username">
+<input id="pw" type="password" placeholder="Password (6+ characters)" autocomplete="new-password">
+<div id="msg" role="alert"></div><button id="go">Register</button>
+<p>Already registered? <a href="/">Sign in</a></p></div>
+<script src="common.js"></script><script>
+$('#go').onclick=async()=>{
+  const r=await fetch('/api/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    name:$('#name').value.trim(),email:$('#email').value.trim(),password:$('#pw').value,role:$('#role').value})});
+  const d=await r.json(); if(!r.ok){$('#msg').textContent=d.error;$('#pw').value='';$('#pw').focus();return;}
+  alert('Account created. Please sign in.'); location.href='/';
+};
+</script></body></html>

@@ -1,0 +1,101 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Student</title><script src="qr.js"></script><link rel="stylesheet" href="style.css"></head><body>
+<header><h1>Library · <span id="who"></span></h1><button class="ghost" onclick="logout()">Sign out</button></header>
+<main>
+<div class="stats"><div class="stat"><b id="pts">0</b>Reward points</div><div class="stat"><b id="held">0</b>Books held</div><div class="stat"><b id="owed">0</b>Fine owed</div></div>
+<p id="rules"></p>
+<section class="box" id="tm" style="display:none"><h2>Demo time machine</h2>
+<p>Today is <b id="today"></b> (<span id="off">0</span> days ahead)</p>
+<div class="row"><button onclick="skip(7)">Skip 7 days</button><button onclick="skip(20)">Skip 20 days</button><button class="del" onclick="skip(0)">Reset</button></div>
+<p>Skip ahead, then return a book to see fines vs reward points.</p></section>
+<div id="pp" role="dialog" aria-modal="true" aria-labelledby="ptitle" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:10;overflow:auto;padding:16px">
+<div class="box" style="max-width:420px;margin:20px auto;text-align:center">
+<h2 id="ptitle"></h2><p id="pinfo"></p>
+<select id="pm" onchange="showMethod()" style="width:100%;margin-bottom:10px"><option value="upi-qr">UPI QR code</option><option value="upi-transfer">UPI transfer (send to UPI ID)</option><option value="card">Debit / credit card</option><option value="netbanking">Net banking</option></select>
+<div id="cardbox" style="display:none"><input id="cn" inputmode="numeric" maxlength="19" placeholder="Card number" autocomplete="off" style="width:100%;margin-bottom:8px">
+<div class="row"><input id="cname" placeholder="Name on card" autocomplete="off"><input id="cexp" placeholder="MM/YY" maxlength="5" autocomplete="off"><input id="ccvv" type="password" inputmode="numeric" maxlength="4" placeholder="CVV" autocomplete="off"></div></div>
+<div id="bankbox" style="display:none"><select id="bank" style="width:100%;margin-bottom:8px"><option>State Bank of India</option><option>HDFC Bank</option><option>ICICI Bank</option><option>Axis Bank</option><option>India Post Payments Bank</option></select></div>
+<div id="qrbox"><div id="qr" style="display:inline-block;background:#fff;padding:10px;border-radius:6px"></div>
+<p>UPI ID: <b id="pupi"></b></p>
+<a id="plink" href="#" style="display:block;padding:10px;margin-bottom:8px;background:var(--brand);color:#fff;border-radius:6px;text-decoration:none">Open UPI app</a>
+<button type="button" onclick="regenQR()" style="width:100%;margin-bottom:8px;background:transparent;color:var(--brand);border:1px solid var(--brand)">New QR code</button></div>
+<div id="tbox" style="display:none"><p>Open any UPI app, choose Send money, and pay to this UPI ID:</p><p><b id="tupi"></b></p><p>Amount: <b id="tamt"></b></p>
+<div class="row"><button type="button" onclick="copyTxt($('#tupi').textContent.replace(' (demo)',''))">Copy UPI ID</button><button type="button" onclick="copyTxt(AMT)">Copy amount</button></div></div>
+<div id="utrbox"><input id="utr" style="width:100%;margin-bottom:8px" placeholder="12-digit UPI transaction ID" inputmode="numeric" maxlength="12"></div>
+<p id="pdemo" style="display:none">Demo only: no real money moves and card details are never sent. Test card: 4111 1111 1111 1111, any future date, any CVV.</p>
+<button id="pbtn" style="width:100%;margin-bottom:8px" onclick="payNow()">I've paid</button>
+<button class="del" style="width:100%" onclick="closePay()">Pay later</button>
+</div></div>
+<section class="box"><h2>My books</h2><div class="tbl"><table><thead><tr><th>Book</th><th>Borrowed</th><th>Due</th><th>Status</th><th></th></tr></thead><tbody id="mine"></tbody></table></div></section>
+<section class="box"><h2>Find a book</h2><div class="row"><input id="q" placeholder="Search title, author or section"></div>
+<div class="tbl"><table><thead><tr><th>Title</th><th>Author</th><th>Section</th><th>Available</th><th></th></tr></thead><tbody id="books"></tbody></table></div></section>
+</main><script src="common.js"></script><script>
+guard('student');
+let ROWS=[],PAYING=null,PAYCFG=null,AMT=0;
+const luhn=n=>{let s=0,d=false;for(let i=n.length-1;i>=0;i--){let x=+n[i];if(d){x*=2;if(x>9)x-=9}s+=x;d=!d}return s%10==0};
+function showMethod(){
+  const m=$('#pm').value,upi=m=='upi-qr',tr=m=='upi-transfer';
+  $('#qrbox').style.display=upi?'block':'none';$('#tbox').style.display=tr?'block':'none';$('#utrbox').style.display=upi||tr?'block':'none';$('#cardbox').style.display=m=='card'?'block':'none';$('#bankbox').style.display=m=='netbanking'?'block':'none';
+  $('#pdemo').style.display=upi||tr?'none':'block';$('#pbtn').textContent=upi||tr?"I've paid":'Pay ₹'+AMT;
+}
+async function openPay(id){
+  const r=ROWS.find(x=>x.id==id);if(!r)return;PAYING=id;PAYCFG=await api('/payconfig');
+  AMT=r.fine-r.fine_paid;const e=encodeURIComponent;
+  $('#ptitle').textContent='Pay fine ₹'+AMT;
+  $('#pinfo').textContent=`Late return of "${r.title}". Choose how to pay.`;
+  const link=`upi://pay?pa=${e(PAYCFG.upiId)}&pn=${e(PAYCFG.payeeName)}&am=${AMT}&cu=INR&tn=${e('Library fine')}&tr=${e(PAYCFG.ref)}`;
+  $('#qr').innerHTML='';new QRCode($('#qr'),{text:link,width:200,height:200});
+  $('#pupi').textContent=PAYCFG.upiId+(PAYCFG.demo?' (demo)':'');$('#plink').href=link;$('#tupi').textContent=$('#pupi').textContent;$('#tamt').textContent='₹'+AMT;
+  $('#utr').value='';$('#utr').placeholder=PAYCFG.demo?'Transaction ID (type any 6+ characters)':'12-digit UPI transaction ID';$('#utr').maxLength=PAYCFG.demo?30:12;$('#utr').inputMode=PAYCFG.demo?'text':'numeric';
+  ['cn','cname','cexp','ccvv'].forEach(i=>$('#'+i).value='');$('#pm').value='upi-qr';showMethod();
+  $('#pp').style.display='block';
+}
+async function regenQR(){PAYCFG=await api('/payconfig');const e=encodeURIComponent;
+  const link=`upi://pay?pa=${e(PAYCFG.upiId)}&pn=${e(PAYCFG.payeeName)}&am=${AMT}&cu=INR&tn=${e('Library fine')}&tr=${e(PAYCFG.ref)}`;
+  $('#qr').innerHTML='';new QRCode($('#qr'),{text:link,width:200,height:200});
+  $('#pupi').textContent=PAYCFG.upiId+(PAYCFG.demo?' (demo)':'');$('#tupi').textContent=$('#pupi').textContent;$('#plink').href=link;}
+function copyTxt(t){try{navigator.clipboard.writeText(String(t)).then(()=>alert('Copied'),()=>alert('Copy not available, please type it'))}catch{alert('Copy not available, please type it')}}
+function closePay(){$('#pp').style.display='none';}
+async function payNow(){
+  const m=$('#pm').value;let utr='';
+  if(m=='upi-qr'||m=='upi-transfer')utr=$('#utr').value;
+  else if(m=='card'){
+    const n=$('#cn').value.replace(/\s/g,'');
+    if(!/^\d{13,19}$/.test(n)||!luhn(n))return alert('Enter a valid card number');
+    if(!$('#cname').value.trim())return alert('Enter the name on the card');
+    if(!/^(0[1-9]|1[0-2])\/\d{2}$/.test($('#cexp').value))return alert('Enter the expiry as MM/YY');
+    if(!/^\d{3,4}$/.test($('#ccvv').value))return alert('Enter the CVV');
+    utr='card ****'+n.slice(-4); // only the last 4 digits are sent
+  } else utr=$('#bank').value;
+  const d=await api('/pay','POST',{borrowalId:PAYING,method:m,utr});
+  closePay();
+  alert(m.startsWith('upi')?`Payment of ₹${d.amount} recorded. Receipt ${d.ref}. Library staff will verify the transaction.`:`Paid ₹${d.amount} by ${m=='card'?'card':'net banking'}. Receipt ${d.ref}`);
+  refresh();
+}
+async function loadMine(){
+  const {me,rows,rules}=await api('/my');ROWS=rows;
+  $('#pts').textContent=me.points;
+  $('#rules').textContent=`Keep a book ${rules.LOAN_DAYS} days. Return on time: +${rules.REWARD} points. Late: ${rules.FINE_PER_DAY} per day. Limit ${rules.MAX_BOOKS} books.`;
+  const open=rows.filter(r=>!r.returned_at);
+  $('#held').textContent=open.length;
+  $('#owed').textContent='₹'+rows.filter(r=>r.returned_at).reduce((s,r)=>s+r.fine-r.fine_paid,0);
+  $('#mine').innerHTML=rows.length?rows.map(r=>{
+    const st=r.returned_at?(r.fine?(r.fine_paid>=r.fine?`<span class="ok">Late, fine ₹${r.fine} paid</span>`:`<span class="late">Late, fine ₹${r.fine} unpaid</span>`):`<span class="ok">Returned on time +${r.reward_points}</span>`)
+      :(r.fine?`<span class="late">Overdue, fine ${r.fine}</span>`:'Borrowed');
+    return `<tr><td>${esc(r.title)}</td><td>${fmt(r.borrowed_at)}</td><td>${fmt(r.due_date)}</td><td>${st}</td>
+    <td>${!r.returned_at?`<button onclick="ret(${r.id})">Return</button>`:(r.fine>r.fine_paid?`<button onclick="openPay(${r.id})">Pay fine</button>`:'')}</td></tr>`}).join(''):'<tr><td colspan="5">No books yet. Borrow one below.</td></tr>';
+}
+async function loadBooks(){
+  const b=await api('/books?q='+encodeURIComponent($('#q').value));
+  $('#books').innerHTML=b.length?b.map(x=>`<tr><td>${esc(x.title)}</td><td>${esc(x.author)}</td><td>${esc(x.section)}</td><td>${x.available_copies}/${x.total_copies}</td>
+  <td><button ${x.available_copies?'':'disabled'} onclick="borrow(${x.id})">Borrow</button></td></tr>`).join(''):'<tr><td colspan="5">No matching books.</td></tr>';
+}
+async function borrow(id){await api('/borrow','POST',{bookId:id});refresh();}
+async function ret(id){const r=await api('/return/'+id,'POST');
+  alert(r.late?`Returned ${r.late} day(s) late. Fine: ₹${r.fine}`:`Returned on time! +${r.points} points`);
+  await refresh();if(r.fine)openPay(id);}
+async function loadDemo(){const d=await api('/demo');if(!d.demo)return;$('#tm').style.display='block';$('#today').textContent=fmt(d.today);$('#off').textContent=d.skipDays;}
+async function skip(n){await api(n?'/demo/skip':'/demo/reset','POST',{days:n});refresh();}
+const refresh=()=>Promise.all([loadMine(),loadBooks(),loadDemo()]);
+let QT=null;$('#q').oninput=()=>{clearTimeout(QT);QT=setTimeout(loadBooks,600)}; refresh();
+</script></body></html>

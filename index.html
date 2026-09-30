@@ -1,0 +1,15 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Library sign in</title><link rel="stylesheet" href="style.css"></head><body>
+<div class="login"><h1>Campus Library</h1><p>Sign in as a student or librarian.</p>
+<input id="email" type="email" placeholder="Email" autocomplete="username">
+<input id="pw" type="password" placeholder="Password" autocomplete="current-password">
+<div id="msg" role="alert"></div><button id="go">Sign in</button><p>New here? <a href="register.html">Create an account</a></p></div>
+<script src="common.js"></script><script>
+async function login(){
+  const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:$('#email').value,password:$('#pw').value})});
+  const d=await r.json(); if(!r.ok){$('#msg').textContent=d.error;$('#pw').value='';$('#pw').focus();return;}
+  localStorage.setItem('token',d.token);localStorage.setItem('user',JSON.stringify(d.user));
+  location.href=d.user.role==='librarian'?'/librarian.html':'/student.html';
+}
+$('#go').onclick=login; $('#pw').onkeydown=e=>e.key==='Enter'&&login();
+</script></body></html>
