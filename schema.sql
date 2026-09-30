@@ -1,0 +1,47 @@
+CREATE TABLE IF NOT EXISTS users (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  email VARCHAR(100) NOT NULL UNIQUE,
+  password_hash VARCHAR(100) NOT NULL,
+  role ENUM('student','librarian') NOT NULL,
+  points INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS sections (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(80) NOT NULL UNIQUE
+);
+CREATE TABLE IF NOT EXISTS books (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(150) NOT NULL,
+  author VARCHAR(100) NOT NULL,
+  section_id INT NOT NULL,
+  total_copies INT NOT NULL DEFAULT 1,
+  available_copies INT NOT NULL DEFAULT 1,
+  FOREIGN KEY (section_id) REFERENCES sections(id)
+);
+CREATE TABLE IF NOT EXISTS borrowals (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  book_id INT NOT NULL,
+  borrowed_at DATETIME NOT NULL,
+  due_date DATETIME NOT NULL,
+  returned_at DATETIME NULL,
+  fine INT NOT NULL DEFAULT 0,
+  fine_paid INT NOT NULL DEFAULT 0,
+  reward_points INT NOT NULL DEFAULT 0,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (book_id) REFERENCES books(id)
+);
+CREATE TABLE IF NOT EXISTS payments (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  borrowal_id INT NOT NULL,
+  amount INT NOT NULL,
+  method VARCHAR(20) NOT NULL,
+  ref VARCHAR(30) NOT NULL,
+  utr VARCHAR(30) NULL,
+  paid_at DATETIME NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (borrowal_id) REFERENCES borrowals(id)
+);
